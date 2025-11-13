@@ -651,6 +651,21 @@
             z-index: 1001;
             display: none;
         }
+        
+        /* 加载指示器 */
+        .loading-indicator {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            color: var(--light-gray);
+        }
+        
+        .compression-progress {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            color: var(--primary-green);
+        }
     </style>
 </head>
 <body>
@@ -869,13 +884,15 @@
                 <div>
                     <i>📷</i>
                     <p>点击或拖拽照片到这里</p>
-                    <p class="file-size-warning" id="fileSizeWarning">照片大小不能超过2MB</p>
+                    <p class="file-size-warning" id="fileSizeWarning">照片大小不能超过3MB</p>
                 </div>
                 <input type="file" id="photoUpload" accept="image/*" style="display: none;">
             </div>
             
             <div class="photo-preview-container">
                 <img id="photoPreview" class="photo-preview" alt="照片预览">
+                <div class="loading-indicator" id="compressionLoading">正在压缩图片...</div>
+                <div class="compression-progress" id="compressionProgress"></div>
             </div>
             
             <div class="btn-group">
@@ -1677,6 +1694,68 @@
             document.getElementById('submitPhotoButton').disabled = true;
             document.getElementById('fileSizeWarning').style.display = 'none';
             document.getElementById('photoUpload').value = '';
+            document.getElementById('compressionLoading').style.display = 'none';
+            document.getElementById('compressionProgress').style.display = 'none';
+        }
+        
+        // 压缩图片函数
+        function compressImage(file, maxSizeMB = 3, quality = 0.8, callback) {
+            const maxSize = maxSizeMB * 1024 * 1024; // 转换为字节
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const img = new Image();
+                img.src = e.target.result;
+                
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // 设置canvas尺寸与图片相同
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    
+                    // 绘制图片到canvas
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    // 初始压缩
+                    let compressedDataURL = canvas.toDataURL('image/jpeg', quality);
+                    
+                    // 如果压缩后仍然大于限制，继续降低质量
+                    let currentQuality = quality;
+                    while (compressedDataURL.length > maxSize && currentQuality > 0.1) {
+                        currentQuality -= 0.1;
+                        compressedDataURL = canvas.toDataURL('image/jpeg', currentQuality);
+                        
+                        // 更新压缩进度
+                        document.getElementById('compressionProgress').textContent = 
+                            `压缩进度: ${Math.round((1 - currentQuality) * 100)}%`;
+                    }
+                    
+                    // 如果仍然太大，尝试缩小尺寸
+                    if (compressedDataURL.length > maxSize) {
+                        const scaleFactor = Math.sqrt(maxSize / compressedDataURL.length);
+                        const newWidth = Math.floor(canvas.width * scaleFactor);
+                        const newHeight = Math.floor(canvas.height * scaleFactor);
+                        
+                        const tempCanvas = document.createElement('canvas');
+                        const tempCtx = tempCanvas.getContext('2d');
+                        tempCanvas.width = newWidth;
+                        tempCanvas.height = newHeight;
+                        
+                        tempCtx.drawImage(img, 0, 0, newWidth, newHeight);
+                        compressedDataURL = tempCanvas.toDataURL('image/jpeg', 0.7);
+                    }
+                    
+                    // 隐藏加载指示器
+                    document.getElementById('compressionLoading').style.display = 'none';
+                    document.getElementById('compressionProgress').style.display = 'none';
+                    
+                    callback(compressedDataURL);
+                };
+            };
+            
+            reader.readAsDataURL(file);
         }
         
         // 处理照片上传
@@ -1690,19 +1769,14 @@
                 return;
             }
             
-            // 检查文件大小 (2MB)
-            if (file.size > 2 * 1024 * 1024) {
-                document.getElementById('fileSizeWarning').style.display = 'block';
-                document.getElementById('submitPhotoButton').disabled = true;
-                return;
-            } else {
-                document.getElementById('fileSizeWarning').style.display = 'none';
-            }
+            // 显示加载指示器
+            document.getElementById('compressionLoading').style.display = 'block';
+            document.getElementById('compressionProgress').style.display = 'block';
+            document.getElementById('compressionProgress').textContent = '开始压缩...';
             
-            // 读取文件为DataURL
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                currentPhotoData = e.target.result;
+            // 压缩图片
+            compressImage(file, 3, 0.8, function(compressedDataURL) {
+                currentPhotoData = compressedDataURL;
                 
                 // 显示照片预览
                 const photoPreview = document.getElementById('photoPreview');
@@ -1711,8 +1785,18 @@
                 
                 // 启用提交按钮
                 document.getElementById('submitPhotoButton').disabled = false;
-            };
-            reader.readAsDataURL(file);
+                
+                // 检查最终文件大小
+                const fileSize = Math.round((currentPhotoData.length * 3) / 4 / 1024); // 近似计算KB
+                if (fileSize > 3072) { // 3MB = 3072KB
+                    document.getElementById('fileSizeWarning').style.display = 'block';
+                    document.getElementById('fileSizeWarning').textContent = 
+                        `照片大小 ${fileSize}KB，仍然超过3MB限制，请选择较小的图片`;
+                    document.getElementById('submitPhotoButton').disabled = true;
+                } else {
+                    document.getElementById('fileSizeWarning').style.display = 'none';
+                }
+            });
         }
         
         // 显示上传成功通知
