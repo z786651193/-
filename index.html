@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>浇个盆友——书香伴绿意，阅读共成长</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --primary-green: #4CAF50;
@@ -258,6 +259,97 @@
             background-color: #f9f9f9;
         }
         
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background-color: white;
+            border-top: 1px solid var(--border-gray);
+        }
+        
+        .page-info {
+            color: var(--light-gray);
+        }
+        
+        .page-controls button {
+            padding: 8px 15px;
+            margin-left: 5px;
+            background-color: white;
+            border: 1px solid var(--border-gray);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .page-controls button.active {
+            background-color: var(--primary-green);
+            color: white;
+            border-color: var(--primary-green);
+        }
+        
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            padding: 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--light-gray);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: var(--light-gray);
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid var(--border-gray);
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+        
         .btn {
             padding: 10px 20px;
             border: none;
@@ -279,6 +371,17 @@
         .btn-warning {
             background-color: var(--warning-red);
             color: white;
+        }
+        
+        .success-message {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .success-icon {
+            font-size: 50px;
+            color: var(--primary-green);
+            margin-bottom: 20px;
         }
         
         /* 登录样式 */
@@ -331,25 +434,6 @@
             color: white;
         }
         
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-            color: var(--light-gray);
-        }
-        
-        .form-control {
-            width: 100%;
-            padding: 10px 15px;
-            border: 1px solid var(--border-gray);
-            border-radius: 5px;
-            font-size: 16px;
-        }
-        
         /* 响应式设计 */
         @media (max-width: 768px) {
             .admin-layout {
@@ -372,6 +456,26 @@
             }
         }
 
+        .plant-info {
+            background-color: var(--light-green);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .plant-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--primary-green);
+            margin-bottom: 5px;
+        }
+        
+        .plant-id {
+            color: var(--light-gray);
+            font-size: 14px;
+        }
+        
         .today-checkin-indicator {
             background-color: #FFEB3B;
             color: #333;
@@ -450,51 +554,15 @@
             border-radius: 5px;
         }
         
-        /* 模态框样式 */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .modal-content {
+        .bind-plant-section {
             background-color: white;
+            padding: 20px;
             border-radius: 10px;
-            width: 90%;
-            max-width: 500px;
-            padding: 30px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }
-        
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
         
-        .close-btn {
-            background: none;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: var(--light-gray);
-        }
-        
-        .btn-group {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 30px;
-        }
-        
-        /* 照片上传区域样式（简化版） */
+        /* 照片上传模态框样式 */
         .photo-upload-area {
             border: 2px dashed var(--border-gray);
             border-radius: 10px;
@@ -502,6 +570,18 @@
             text-align: center;
             margin-bottom: 20px;
             cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .photo-upload-area:hover {
+            border-color: var(--primary-green);
+            background-color: var(--light-green);
+        }
+        
+        .photo-upload-area i {
+            font-size: 48px;
+            color: var(--light-gray);
+            margin-bottom: 10px;
         }
         
         .file-size-warning {
@@ -515,46 +595,76 @@
             text-align: center;
             margin-bottom: 20px;
         }
-
-        .content-section {
+        
+        /* 新增：上传通知栏样式 */
+        .upload-notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            z-index: 1002;
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
             display: none;
         }
         
-        .content-section.active {
-            display: block;
+        .notification-icon {
+            font-size: 48px;
+            color: var(--primary-green);
+            margin-bottom: 15px;
         }
         
-        .batch-actions {
-            margin-top: 10px;
-            text-align: right;
+        .notification-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--primary-green);
+            margin-bottom: 10px;
         }
         
-        .compression-info {
-            font-size: 12px;
+        .notification-message {
             color: var(--light-gray);
-            margin-top: 5px;
+            margin-bottom: 20px;
         }
         
-        .progress-bar-container {
-            width: 100%;
-            background-color: #f0f0f0;
-            border-radius: 5px;
-            margin: 10px 0;
-            display: none;
-        }
-        
-        .progress-bar {
-            height: 6px;
+        .notification-close-btn {
             background-color: var(--primary-green);
+            color: white;
+            border: none;
             border-radius: 5px;
-            width: 0%;
-            transition: width 0.3s;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .notification-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1001;
+            display: none;
         }
     </style>
 </head>
 <body>
     <!-- 连接状态指示器 -->
     <div class="status-indicator status-disconnected" id="statusIndicator">数据库未连接</div>
+
+    <!-- 新增：上传通知栏 -->
+    <div class="notification-overlay" id="notificationOverlay"></div>
+    <div class="upload-notification" id="uploadNotification">
+        <div class="notification-icon">✅</div>
+        <div class="notification-title">照片上传成功</div>
+        <div class="notification-message">您的打卡照片已成功上传，等待管理员审核</div>
+        <button class="notification-close-btn" id="closeNotificationButton">确定</button>
+    </div>
 
     <!-- 登录页面 -->
     <div class="login-container" id="loginPage">
@@ -573,13 +683,13 @@
             
             <div class="form-group">
                 <label for="username">姓名</label>
-                <input type="text" id="username" class="form-control" placeholder="请输入您的姓名" autocomplete="name">
+                <input type="text" id="username" class="form-control" placeholder="请输入您的姓名">
             </div>
             
             <!-- 工作人员密码输入区域 -->
             <div class="form-group" id="adminPasswordContainer" style="display: none;">
                 <label for="password">密码</label>
-                <input type="password" id="password" class="form-control" placeholder="请输入密码" autocomplete="current-password">
+                <input type="password" id="password" class="form-control" placeholder="请输入密码">
             </div>
             
             <!-- 植物选择区域 - 新用户使用 -->
@@ -587,6 +697,7 @@
                 <label for="plantSelect">选择认养植物</label>
                 <select id="plantSelect" class="form-control">
                     <option value="">请选择您认养的植物</option>
+                    <!-- 植物选项将通过JavaScript动态生成 -->
                 </select>
             </div>
             
@@ -660,7 +771,7 @@
             
             <div class="content-area">
                 <!-- 植物信息管理 -->
-                <div id="plantManage" class="content-section active">
+                <div id="plantManage" class="content-section">
                     <div class="table-header">
                         <h3>植物信息管理</h3>
                         <button class="btn btn-primary" id="addPlantButton">添加植物</button>
@@ -685,7 +796,7 @@
                 </div>
                 
                 <!-- 参与者管理 -->
-                <div id="adopterManage" class="content-section">
+                <div id="adopterManage" class="content-section" style="display: none;">
                     <div class="table-header">
                         <h3>参与者管理</h3>
                         <button class="btn btn-primary" id="bindAdopterButton">绑定植物</button>
@@ -710,17 +821,13 @@
                 </div>
                 
                 <!-- 打卡审核 -->
-                <div id="checkinReview" class="content-section">
+                <div id="checkinReview" class="content-section" style="display: none;">
                     <div class="table-header">
                         <h3>待审核打卡记录</h3>
                         <div>
                             <button class="btn btn-primary" id="batchApproveButton">批量通过</button>
                             <button class="btn btn-secondary" style="margin-left: 10px;" id="batchRejectButton">批量拒绝</button>
                         </div>
-                    </div>
-                    
-                    <div class="batch-actions">
-                        <span id="selectedCount">已选择 0 项</span>
                     </div>
                     
                     <div class="data-table">
@@ -756,19 +863,15 @@
             
             <div class="form-group">
                 <p>请上传今日的植物照片作为打卡凭证</p>
-                <p class="compression-info">系统会自动压缩图片至3MB以内，请放心上传</p>
             </div>
             
             <div class="photo-upload-area" id="photoUploadArea">
                 <div>
-                    <p>📷 点击选择照片</p>
-                    <p class="file-size-warning" id="fileSizeWarning">照片大小不能超过10MB</p>
+                    <i>📷</i>
+                    <p>点击或拖拽照片到这里</p>
+                    <p class="file-size-warning" id="fileSizeWarning">照片大小不能超过2MB</p>
                 </div>
                 <input type="file" id="photoUpload" accept="image/*" style="display: none;">
-            </div>
-            
-            <div class="progress-bar-container" id="compressionProgress">
-                <div class="progress-bar" id="compressionProgressBar"></div>
             </div>
             
             <div class="photo-preview-container">
@@ -840,12 +943,12 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1c2pqc3Bid3hubXJjd2Z0YXF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3NjI4MDksImV4cCI6MjA3ODMzODgwOX0.IqVotyCUMA4y-Fp4TN-WmTgZfw1fUMc_EG4kebsHWbQ';
         
         // 全局变量
+        let supabase = null;
         let currentUser = null;
         let plants = [];
         let adopters = [];
         let checkins = [];
         let currentPhotoData = null;
-        let selectedCheckins = new Set();
         
         // 显示错误消息
         function showError(message) {
@@ -884,93 +987,40 @@
             const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         }
-
-        // 初始化Supabase - 使用fetch API直接调用
-        async function initializeSupabase() {
-            console.log('正在初始化数据库连接...');
-            
-            try {
-                // 测试连接
-                const testResponse = await fetch(`${SUPABASE_URL}/rest/v1/plants?limit=1`, {
-                    headers: {
-                        'apikey': SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-                    }
-                });
-                
-                if (!testResponse.ok) {
-                    throw new Error(`数据库连接失败: ${testResponse.status}`);
-                }
-                
-                console.log('数据库连接测试成功');
-                updateConnectionStatus(true);
-                return true;
-                
-            } catch (error) {
-                console.error('数据库连接失败:', error);
-                showError('数据库连接失败，请检查网络连接');
-                updateConnectionStatus(false);
-                return false;
-            }
-        }
-
-        // 使用fetch API调用Supabase
-        async function supabaseFetch(endpoint, options = {}) {
-            const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
-            
-            const defaultHeaders = {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=representation'
-            };
-            
-            try {
-                const response = await fetch(url, {
-                    headers: { ...defaultHeaders, ...options.headers },
-                    ...options
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-                }
-                
-                // 对于DELETE请求可能没有内容
-                if (response.status === 204 || response.status === 201) {
-                    return null;
-                }
-                
-                return await response.json();
-            } catch (error) {
-                console.error('API请求失败:', error);
-                throw error;
-            }
-        }
         
         // 从Supabase加载数据
         async function loadData() {
             try {
-                console.log('开始加载数据...');
-                
                 // 加载植物数据
-                const plantsData = await supabaseFetch('plants?order=id');
+                const { data: plantsData, error: plantsError } = await supabase
+                    .from('plants')
+                    .select('*')
+                    .order('id');
+                
+                if (plantsError) throw plantsError;
                 plants = plantsData || [];
-                console.log('植物数据:', plants);
                 
                 // 加载参与者数据
-                try {
-                    const adoptersData = await supabaseFetch('adopters');
-                    adopters = adoptersData || [];
-                    console.log('参与者数据:', adopters);
-                } catch (error) {
-                    console.error('加载参与者错误:', error);
+                const { data: adoptersData, error: adoptersError } = await supabase
+                    .from('adopters')
+                    .select('*');
+                
+                if (adoptersError) {
+                    console.error('加载参与者错误:', adoptersError);
                     adopters = [];
+                } else {
+                    adopters = adoptersData || [];
                 }
                 
                 // 加载打卡记录
-                const checkinsData = await supabaseFetch('checkins?order=date.desc,time.desc');
+                const { data: checkinsData, error: checkinsError } = await supabase
+                    .from('checkins')
+                    .select('*')
+                    .order('date', { ascending: false })
+                    .order('time', { ascending: false });
+                
+                if (checkinsError) throw checkinsError;
                 checkins = checkinsData || [];
-                console.log('打卡记录:', checkins);
                 
                 // 更新前端显示
                 updateLoginPlantSelect();
@@ -979,12 +1029,6 @@
                 renderPlantTable();
                 renderAdopterTable();
                 renderCheckinTable();
-                
-                // 如果当前用户已登录，更新用户进度
-                if (currentUser && currentUser.type === 'user') {
-                    console.log('检测到用户已登录，更新进度');
-                    updateUserProgress();
-                }
                 
                 updateConnectionStatus(true);
                 return true;
@@ -1153,7 +1197,6 @@
             if (pendingCheckins.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="no-records">暂无待审核的打卡记录</td></tr>';
                 document.getElementById('pendingCheckinCount').textContent = '0';
-                document.getElementById('selectedCount').textContent = '已选择 0 项';
                 return;
             }
             
@@ -1162,10 +1205,9 @@
                 const plant = plants.find(p => p.id === checkin.plant_id);
                 
                 if (adopter && plant) {
-                    const isChecked = selectedCheckins.has(checkin.id.toString());
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td><input type="checkbox" class="record-checkbox" data-checkin-id="${checkin.id}" ${isChecked ? 'checked' : ''}></td>
+                        <td><input type="checkbox" class="record-checkbox" data-checkin-id="${checkin.id}"></td>
                         <td>${checkin.date} ${checkin.time}</td>
                         <td>${adopter.name}</td>
                         <td>${plant.name} #${plant.id}</td>
@@ -1185,28 +1227,21 @@
             });
             
             document.getElementById('pendingCheckinCount').textContent = pendingCheckins.length;
-            document.getElementById('selectedCount').textContent = `已选择 ${selectedCheckins.size} 项`;
         }
         
         // 更新用户打卡进度
         function updateUserProgress() {
             if (!currentUser) return;
             
-            console.log('更新用户进度:', currentUser.username);
-            
-            // 获取用户的所有已批准的打卡记录
+            // 获取用户的所有打卡记录
             const userCheckins = checkins.filter(
                 checkin => checkin.student_id === currentUser.username && checkin.status === 'approved'
             );
-            
-            console.log('用户打卡记录:', userCheckins);
             
             // 计算已打卡天数（去重）
             const uniqueDates = [...new Set(userCheckins.map(checkin => checkin.date))];
             const checkinDays = uniqueDates.length;
             const targetDays = 21;
-            
-            console.log('去重后的打卡日期:', uniqueDates, '天数:', checkinDays);
             
             // 更新进度显示
             document.getElementById('progressDays').textContent = `${checkinDays}/${targetDays}`;
@@ -1314,18 +1349,24 @@
                     
                     // 创建新用户
                     try {
-                        const result = await supabaseFetch('adopters', {
-                            method: 'POST',
-                            body: JSON.stringify([{ 
+                        const { data, error } = await supabase
+                            .from('adopters')
+                            .insert([{ 
                                 name: username,
                                 plant_id: selectedPlantId
                             }])
-                        });
+                            .select();
+                        
+                        if (error) {
+                            console.error('创建用户错误:', error);
+                            showError('自动创建用户失败: ' + error.message);
+                            return;
+                        }
                         
                         // 添加到本地数组
-                        if (result && result.length > 0) {
-                            adopters.push(result[0]);
-                            adopter = result[0];
+                        if (data && data.length > 0) {
+                            adopters.push(data[0]);
+                            adopter = data[0];
                         } else {
                             const newAdopter = { name: username, plant_id: selectedPlantId };
                             adopters.push(newAdopter);
@@ -1333,17 +1374,13 @@
                         }
                         
                         // 更新植物状态
-                        await supabaseFetch(`plants?id=eq.${selectedPlantId}`, {
-                            method: 'PATCH',
-                            body: JSON.stringify({
-                                status: '已被认养',
-                                bound_user: username
-                            })
-                        });
+                        await updatePlantStatus(selectedPlantId, username);
                         
-                        // 重新加载数据
-                        await loadData();
-                        
+                        // 更新管理员界面
+                        updateAdminPlantSelect();
+                        updateAdopterSelect();
+                        renderPlantTable();
+                        renderAdopterTable();
                     } catch (error) {
                         console.error('创建用户错误:', error);
                         showError('自动创建用户失败: ' + error.message);
@@ -1398,10 +1435,16 @@
             
             try {
                 // 更新数据库
-                await supabaseFetch(`adopters?name=eq.${adopterName}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ plant_id: plantId })
-                });
+                const { error } = await supabase
+                    .from('adopters')
+                    .update({ plant_id: plantId })
+                    .eq('name', adopterName);
+                
+                if (error) {
+                    console.error('绑定植物错误:', error);
+                    showError('绑定植物失败: ' + error.message);
+                    return;
+                }
                 
                 // 更新本地数据
                 const adopterIndex = adopters.findIndex(a => a.name === adopterName);
@@ -1410,13 +1453,7 @@
                 }
                 
                 // 更新植物状态
-                await supabaseFetch(`plants?id=eq.${plantId}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({
-                        status: '已被认养',
-                        bound_user: adopterName
-                    })
-                });
+                await updatePlantStatus(plantId, adopterName);
                 
                 // 更新界面
                 closeBindPlantModal();
@@ -1430,6 +1467,25 @@
                 console.error('绑定植物错误:', error);
                 showError('绑定植物失败: ' + error.message);
             }
+        }
+        
+        // 更新植物状态
+        async function updatePlantStatus(plantId, adopterName) {
+            // 更新数据库中的植物状态
+            const { error } = await supabase
+                .from('plants')
+                .update({
+                    status: '已被认养',
+                    bound_user: adopterName
+                })
+                .eq('id', plantId);
+            
+            if (error) {
+                console.error('更新植物状态错误:', error);
+            }
+            
+            // 重新加载数据以确保同步
+            await loadData();
         }
         
         // 退出登录
@@ -1509,15 +1565,20 @@
             }
             
             try {
-                await supabaseFetch('plants', {
-                    method: 'POST',
-                    body: JSON.stringify([{
+                const { error } = await supabase
+                    .from('plants')
+                    .insert([{
                         id: plantId,
                         name: plantName,
                         description: plantDescription,
                         status: '待认养'
-                    }])
-                });
+                    }]);
+                
+                if (error) {
+                    console.error('添加植物错误:', error);
+                    showError('添加植物失败: ' + error.message);
+                    return;
+                }
                 
                 // 重新加载数据
                 await loadData();
@@ -1540,18 +1601,20 @@
                 return;
             }
             
-            try {
-                await supabaseFetch(`plants?id=eq.${plantId}`, {
-                    method: 'DELETE'
-                });
-                
-                // 重新加载数据
-                await loadData();
-                alert('植物删除成功');
-            } catch (error) {
+            const { error } = await supabase
+                .from('plants')
+                .delete()
+                .eq('id', plantId);
+            
+            if (error) {
                 console.error('删除植物错误:', error);
                 showError('删除植物失败');
+                return;
             }
+            
+            // 重新加载数据
+            await loadData();
+            alert('植物删除成功');
         }
         
         // 删除参与者
@@ -1560,33 +1623,39 @@
             
             const adopter = adopters.find(a => a.name === adopterName);
             
-            try {
-                await supabaseFetch(`adopters?name=eq.${adopterName}`, {
-                    method: 'DELETE'
-                });
-                
-                // 从本地数组移除
-                adopters = adopters.filter(a => a.name !== adopterName);
-                
-                // 如果参与者绑定了植物，更新植物状态
-                if (adopter && adopter.plant_id) {
-                    await supabaseFetch(`plants?id=eq.${adopter.plant_id}`, {
-                        method: 'PATCH',
-                        body: JSON.stringify({
-                            status: '待认养',
-                            bound_user: ''
-                        })
-                    });
-                }
-                
-                // 重新加载数据以确保同步
-                await loadData();
-                
-                alert('参与者删除成功');
-            } catch (error) {
+            const { error } = await supabase
+                .from('adopters')
+                .delete()
+                .eq('name', adopterName);
+            
+            if (error) {
                 console.error('删除参与者错误:', error);
                 showError('删除参与者失败');
+                return;
             }
+            
+            // 从本地数组移除
+            adopters = adopters.filter(a => a.name !== adopterName);
+            
+            // 如果参与者绑定了植物，更新植物状态
+            if (adopter && adopter.plant_id) {
+                const { error: plantError } = await supabase
+                    .from('plants')
+                    .update({
+                        status: '待认养',
+                        bound_user: ''
+                    })
+                    .eq('id', adopter.plant_id);
+                
+                if (plantError) {
+                    console.error('更新植物状态错误:', plantError);
+                }
+            }
+            
+            // 重新加载数据以确保同步
+            await loadData();
+            
+            alert('参与者删除成功');
         }
         
         // 打开照片上传模态框
@@ -1608,93 +1677,10 @@
             document.getElementById('submitPhotoButton').disabled = true;
             document.getElementById('fileSizeWarning').style.display = 'none';
             document.getElementById('photoUpload').value = '';
-            document.getElementById('compressionProgress').style.display = 'none';
-            document.getElementById('compressionProgressBar').style.width = '0%';
-        }
-        
-        // 图片压缩函数
-        function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.8, maxSizeMB = 3) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const img = new Image();
-                    img.onload = function() {
-                        // 计算压缩后的尺寸
-                        let width = img.width;
-                        let height = img.height;
-                        
-                        if (width > maxWidth) {
-                            height = Math.round((height * maxWidth) / width);
-                            width = maxWidth;
-                        }
-                        
-                        if (height > maxHeight) {
-                            width = Math.round((width * maxHeight) / height);
-                            height = maxHeight;
-                        }
-                        
-                        // 创建canvas进行压缩
-                        const canvas = document.createElement('canvas');
-                        canvas.width = width;
-                        canvas.height = height;
-                        
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
-                        
-                        // 逐步降低质量直到文件大小符合要求
-                        let compressedDataURL = canvas.toDataURL('image/jpeg', quality);
-                        let compressedSize = (compressedDataURL.length * 0.75) / (1024 * 1024); // 转换为MB
-                        
-                        // 显示压缩进度
-                        document.getElementById('compressionProgress').style.display = 'block';
-                        document.getElementById('compressionProgressBar').style.width = '50%';
-                        
-                        // 如果压缩后仍然太大，进一步降低质量
-                        if (compressedSize > maxSizeMB) {
-                            let currentQuality = quality;
-                            const step = 0.1;
-                            
-                            function tryCompress() {
-                                currentQuality -= step;
-                                if (currentQuality <= 0.1) {
-                                    currentQuality = 0.1;
-                                }
-                                
-                                compressedDataURL = canvas.toDataURL('image/jpeg', currentQuality);
-                                compressedSize = (compressedDataURL.length * 0.75) / (1024 * 1024);
-                                
-                                // 更新进度条
-                                const progress = 50 + (50 * ((quality - currentQuality) / (quality - 0.1)));
-                                document.getElementById('compressionProgressBar').style.width = `${Math.min(progress, 100)}%`;
-                                
-                                if (compressedSize > maxSizeMB && currentQuality > 0.1) {
-                                    setTimeout(tryCompress, 10);
-                                } else {
-                                    document.getElementById('compressionProgressBar').style.width = '100%';
-                                    setTimeout(() => {
-                                        resolve(compressedDataURL);
-                                    }, 300);
-                                }
-                            }
-                            
-                            tryCompress();
-                        } else {
-                            document.getElementById('compressionProgressBar').style.width = '100%';
-                            setTimeout(() => {
-                                resolve(compressedDataURL);
-                            }, 300);
-                        }
-                    };
-                    img.onerror = reject;
-                    img.src = e.target.result;
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
         }
         
         // 处理照片上传
-        async function handlePhotoUpload(event) {
+        function handlePhotoUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
             
@@ -1704,8 +1690,8 @@
                 return;
             }
             
-            // 检查文件大小 (10MB)
-            if (file.size > 10 * 1024 * 1024) {
+            // 检查文件大小 (2MB)
+            if (file.size > 2 * 1024 * 1024) {
                 document.getElementById('fileSizeWarning').style.display = 'block';
                 document.getElementById('submitPhotoButton').disabled = true;
                 return;
@@ -1713,13 +1699,10 @@
                 document.getElementById('fileSizeWarning').style.display = 'none';
             }
             
-            // 显示加载状态
-            document.getElementById('submitPhotoButton').disabled = true;
-            document.getElementById('submitPhotoButton').textContent = '处理中...';
-            
-            try {
-                // 压缩图片
-                currentPhotoData = await compressImage(file);
+            // 读取文件为DataURL
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentPhotoData = e.target.result;
                 
                 // 显示照片预览
                 const photoPreview = document.getElementById('photoPreview');
@@ -1728,13 +1711,20 @@
                 
                 // 启用提交按钮
                 document.getElementById('submitPhotoButton').disabled = false;
-                document.getElementById('submitPhotoButton').textContent = '提交打卡';
-            } catch (error) {
-                console.error('图片处理错误:', error);
-                showError('图片处理失败，请重试');
-                document.getElementById('submitPhotoButton').disabled = true;
-                document.getElementById('submitPhotoButton').textContent = '提交打卡';
-            }
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // 显示上传成功通知
+        function showUploadNotification() {
+            document.getElementById('uploadNotification').style.display = 'block';
+            document.getElementById('notificationOverlay').style.display = 'block';
+        }
+        
+        // 隐藏上传成功通知
+        function hideUploadNotification() {
+            document.getElementById('uploadNotification').style.display = 'none';
+            document.getElementById('notificationOverlay').style.display = 'none';
         }
         
         // 提交打卡（带照片）
@@ -1778,14 +1768,20 @@
             
             try {
                 // 添加到数据库
-                const result = await supabaseFetch('checkins', {
-                    method: 'POST',
-                    body: JSON.stringify([newCheckin])
-                });
+                const { data, error } = await supabase
+                    .from('checkins')
+                    .insert([newCheckin])
+                    .select();
+                
+                if (error) {
+                    console.error('添加打卡记录错误:', error);
+                    showError('提交打卡失败，请重试: ' + error.message);
+                    return;
+                }
                 
                 // 添加到本地数组
-                if (result && result.length > 0) {
-                    checkins.push(result[0]);
+                if (data && data.length > 0) {
+                    checkins.push(data[0]);
                 } else {
                     checkins.push(newCheckin);
                 }
@@ -1793,11 +1789,11 @@
                 // 更新后台数据
                 renderCheckinTable();
                 
-                // 显示成功消息
-                alert('打卡提交成功，等待审核！');
-                
                 // 关闭照片上传模态框
                 closePhotoUploadModal();
+                
+                // 显示上传成功通知
+                showUploadNotification();
                 
                 // 重新加载数据以确保同步
                 await loadData();
@@ -1812,169 +1808,50 @@
         
         // 审核通过打卡
         async function approveCheckin(checkinId) {
-            try {
-                await supabaseFetch(`checkins?id=eq.${checkinId}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ status: 'approved' })
-                });
-                
-                // 更新本地数组
-                const checkinIndex = checkins.findIndex(c => c.id == checkinId);
-                if (checkinIndex !== -1) {
-                    checkins[checkinIndex].status = 'approved';
-                }
-                
-                // 重新加载数据以确保同步
-                await loadData();
-                
-                alert('打卡记录已通过审核');
-            } catch (error) {
+            const { error } = await supabase
+                .from('checkins')
+                .update({ status: 'approved' })
+                .eq('id', checkinId);
+            
+            if (error) {
                 console.error('审核通过错误:', error);
                 showError('审核操作失败');
+                return;
             }
+            
+            // 更新本地数组
+            const checkinIndex = checkins.findIndex(c => c.id === checkinId);
+            if (checkinIndex !== -1) {
+                checkins[checkinIndex].status = 'approved';
+            }
+            
+            // 重新渲染表格
+            renderCheckinTable();
+            alert('打卡记录已通过审核');
         }
         
         // 审核拒绝打卡
         async function rejectCheckin(checkinId) {
-            try {
-                await supabaseFetch(`checkins?id=eq.${checkinId}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ status: 'rejected' })
-                });
-                
-                // 更新本地数组
-                const checkinIndex = checkins.findIndex(c => c.id == checkinId);
-                if (checkinIndex !== -1) {
-                    checkins[checkinIndex].status = 'rejected';
-                }
-                
-                // 重新渲染表格
-                renderCheckinTable();
-                alert('打卡记录已拒绝');
-            } catch (error) {
+            const { error } = await supabase
+                .from('checkins')
+                .update({ status: 'rejected' })
+                .eq('id', checkinId);
+            
+            if (error) {
                 console.error('审核拒绝错误:', error);
                 showError('审核操作失败');
-            }
-        }
-        
-        // 批量通过打卡
-        async function batchApproveCheckins() {
-            if (selectedCheckins.size === 0) {
-                alert('请先选择要审核通过的打卡记录');
                 return;
             }
-
-            if (!confirm(`确定要通过选中的 ${selectedCheckins.size} 条打卡记录吗？`)) {
-                return;
+            
+            // 更新本地数组
+            const checkinIndex = checkins.findIndex(c => c.id === checkinId);
+            if (checkinIndex !== -1) {
+                checkins[checkinIndex].status = 'rejected';
             }
-
-            try {
-                const checkinIds = Array.from(selectedCheckins);
-                
-                // 批量更新状态
-                for (const checkinId of checkinIds) {
-                    await supabaseFetch(`checkins?id=eq.${checkinId}`, {
-                        method: 'PATCH',
-                        body: JSON.stringify({ status: 'approved' })
-                    });
-                    
-                    // 更新本地数组
-                    const checkinIndex = checkins.findIndex(c => c.id == checkinId);
-                    if (checkinIndex !== -1) {
-                        checkins[checkinIndex].status = 'approved';
-                    }
-                }
-
-                // 清空选择
-                selectedCheckins.clear();
-                document.getElementById('selectAll').checked = false;
-                
-                // 重新渲染表格
-                renderCheckinTable();
-                
-                // 重新加载数据以确保同步
-                await loadData();
-                
-                alert(`成功通过 ${checkinIds.length} 条打卡记录`);
-            } catch (error) {
-                console.error('批量通过错误:', error);
-                showError('批量通过失败: ' + error.message);
-            }
-        }
-
-        // 批量拒绝打卡
-        async function batchRejectCheckins() {
-            if (selectedCheckins.size === 0) {
-                alert('请先选择要审核拒绝的打卡记录');
-                return;
-            }
-
-            if (!confirm(`确定要拒绝选中的 ${selectedCheckins.size} 条打卡记录吗？`)) {
-                return;
-            }
-
-            try {
-                const checkinIds = Array.from(selectedCheckins);
-                
-                // 批量更新状态
-                for (const checkinId of checkinIds) {
-                    await supabaseFetch(`checkins?id=eq.${checkinId}`, {
-                        method: 'PATCH',
-                        body: JSON.stringify({ status: 'rejected' })
-                    });
-                    
-                    // 更新本地数组
-                    const checkinIndex = checkins.findIndex(c => c.id == checkinId);
-                    if (checkinIndex !== -1) {
-                        checkins[checkinIndex].status = 'rejected';
-                    }
-                }
-
-                // 清空选择
-                selectedCheckins.clear();
-                document.getElementById('selectAll').checked = false;
-                
-                // 重新渲染表格
-                renderCheckinTable();
-                
-                alert(`成功拒绝 ${checkinIds.length} 条打卡记录`);
-            } catch (error) {
-                console.error('批量拒绝错误:', error);
-                showError('批量拒绝失败: ' + error.message);
-            }
-        }
-        
-        // 初始化批量选择功能
-        function initializeBatchSelection() {
-            // 全选/取消全选
-            document.getElementById('selectAll').addEventListener('change', function(e) {
-                const checkboxes = document.querySelectorAll('.record-checkbox');
-                checkboxes.forEach(checkbox => {
-                    checkbox.checked = e.target.checked;
-                    const checkinId = checkbox.getAttribute('data-checkin-id');
-                    if (e.target.checked) {
-                        selectedCheckins.add(checkinId);
-                    } else {
-                        selectedCheckins.delete(checkinId);
-                    }
-                });
-                document.getElementById('selectedCount').textContent = `已选择 ${selectedCheckins.size} 项`;
-            });
-
-            // 单个选择框变化
-            document.addEventListener('change', function(e) {
-                if (e.target.classList.contains('record-checkbox')) {
-                    const checkinId = e.target.getAttribute('data-checkin-id');
-                    if (e.target.checked) {
-                        selectedCheckins.add(checkinId);
-                    } else {
-                        selectedCheckins.delete(checkinId);
-                        // 取消全选状态
-                        document.getElementById('selectAll').checked = false;
-                    }
-                    document.getElementById('selectedCount').textContent = `已选择 ${selectedCheckins.size} 项`;
-                }
-            });
+            
+            // 重新渲染表格
+            renderCheckinTable();
+            alert('打卡记录已拒绝');
         }
         
         // 用户类型切换
@@ -2108,12 +1985,35 @@
                 document.getElementById('photoUpload').click();
             });
             
-            // 批量操作按钮
-            document.getElementById('batchApproveButton').addEventListener('click', batchApproveCheckins);
-            document.getElementById('batchRejectButton').addEventListener('click', batchRejectCheckins);
+            // 关闭通知按钮
+            document.getElementById('closeNotificationButton').addEventListener('click', hideUploadNotification);
+            document.getElementById('notificationOverlay').addEventListener('click', hideUploadNotification);
             
-            // 初始化批量选择
-            initializeBatchSelection();
+            // 拖放功能
+            const photoUploadArea = document.getElementById('photoUploadArea');
+            photoUploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.style.borderColor = 'var(--primary-green)';
+                this.style.backgroundColor = 'var(--light-green)';
+            });
+            
+            photoUploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                this.style.borderColor = 'var(--border-gray)';
+                this.style.backgroundColor = 'transparent';
+            });
+            
+            photoUploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.style.borderColor = 'var(--border-gray)';
+                this.style.backgroundColor = 'transparent';
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    document.getElementById('photoUpload').files = files;
+                    handlePhotoUpload({ target: { files: files } });
+                }
+            });
             
             // 动态生成的按钮事件委托
             document.addEventListener('click', function(e) {
@@ -2155,14 +2055,27 @@
             console.log('事件监听器初始化完成');
         }
         
+        // 初始化Supabase
+        function initializeSupabase() {
+            console.log('初始化Supabase...');
+            
+            try {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('Supabase初始化成功');
+                return true;
+            } catch (error) {
+                console.error('Supabase初始化失败:', error);
+                showError('Supabase初始化失败: ' + error.message);
+                return false;
+            }
+        }
+        
         // 页面加载时初始化
-        document.addEventListener('DOMContentLoaded', async function() {
+        document.addEventListener('DOMContentLoaded', function() {
             console.log('页面加载完成，开始初始化...');
             
-            // 初始化数据库连接
-            const dbConnected = await initializeSupabase();
-            
-            if (dbConnected) {
+            // 初始化Supabase
+            if (initializeSupabase()) {
                 // 初始化事件监听器
                 initializeEventListeners();
                 
@@ -2170,7 +2083,7 @@
                 handleUserTypeChange();
                 
                 // 初始化数据
-                await initializeData();
+                initializeData();
                 
                 console.log('初始化完成');
             }
