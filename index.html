@@ -9,7 +9,7 @@
         :root {
             --primary-green: #4CAF50;
             --light-green: #E8F5E9;
-            --cream-white: #F5F5F5;
+            --cream-white: #F5F5F0;
             --light-gray: #757575;
             --border-gray: #E0E0E0;
             --warning-red: #f44336;
@@ -546,6 +546,11 @@
             color: white;
         }
         
+        .status-connecting {
+            background-color: #FF9800;
+            color: white;
+        }
+        
         .photo-preview {
             max-width: 100%;
             max-height: 300px;
@@ -596,7 +601,15 @@
             margin-bottom: 20px;
         }
         
-        /* 新增：上传通知栏样式 */
+        /* 新增：压缩进度指示器 */
+        .compression-status {
+            text-align: center;
+            padding: 10px;
+            color: var(--primary-green);
+            display: none;
+        }
+        
+        /* 新增：上传成功通知 */
         .upload-notification {
             position: fixed;
             top: 50%;
@@ -652,27 +665,27 @@
             display: none;
         }
         
-        /* 加载指示器 */
-        .loading-indicator {
-            display: none;
-            text-align: center;
-            padding: 10px;
-            color: var(--light-gray);
-        }
-        
-        .compression-progress {
-            display: none;
-            text-align: center;
-            padding: 10px;
-            color: var(--primary-green);
+        /* 新增：重连按钮 */
+        .reconnect-btn {
+            background-color: #FF9800;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
         }
     </style>
 </head>
 <body>
     <!-- 连接状态指示器 -->
-    <div class="status-indicator status-disconnected" id="statusIndicator">数据库未连接</div>
+    <div class="status-indicator status-disconnected" id="statusIndicator">
+        数据库未连接
+        <button class="reconnect-btn" id="reconnectButton" style="display: none;">重连</button>
+    </div>
 
-    <!-- 新增：上传通知栏 -->
+    <!-- 新增：上传成功通知 -->
     <div class="notification-overlay" id="notificationOverlay"></div>
     <div class="upload-notification" id="uploadNotification">
         <div class="notification-icon">✅</div>
@@ -884,15 +897,14 @@
                 <div>
                     <i>📷</i>
                     <p>点击或拖拽照片到这里</p>
-                    <p class="file-size-warning" id="fileSizeWarning">照片大小不能超过3MB</p>
+                    <p class="file-size-warning" id="fileSizeWarning">照片大小不能超过3MB，超过会自动压缩</p>
                 </div>
                 <input type="file" id="photoUpload" accept="image/*" style="display: none;">
             </div>
             
             <div class="photo-preview-container">
                 <img id="photoPreview" class="photo-preview" alt="照片预览">
-                <div class="loading-indicator" id="compressionLoading">正在压缩图片...</div>
-                <div class="compression-progress" id="compressionProgress"></div>
+                <div class="compression-status" id="compressionStatus">正在压缩图片...</div>
             </div>
             
             <div class="btn-group">
@@ -966,26 +978,54 @@
         let adopters = [];
         let checkins = [];
         let currentPhotoData = null;
+        let selectedCheckins = []; // 存储选中的打卡记录ID
+        let connectionRetryCount = 0;
+        const MAX_RETRY_COUNT = 5;
+        
+        // 安全的DOM元素获取函数
+        function getElementSafely(id) {
+            const element = document.getElementById(id);
+            if (!element) {
+                console.warn(`元素 ${id} 未找到`);
+            }
+            return element;
+        }
         
         // 显示错误消息
         function showError(message) {
-            const errorElement = document.getElementById('errorMessage');
-            errorElement.textContent = message;
-            errorElement.style.display = 'block';
-            setTimeout(() => {
-                errorElement.style.display = 'none';
-            }, 5000);
+            const errorElement = getElementSafely('errorMessage');
+            if (errorElement) {
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+                setTimeout(() => {
+                    errorElement.style.display = 'none';
+                }, 5000);
+            }
         }
         
         // 更新连接状态
-        function updateConnectionStatus(isConnected) {
-            const statusIndicator = document.getElementById('statusIndicator');
-            if (isConnected) {
-                statusIndicator.textContent = '数据库已连接';
-                statusIndicator.className = 'status-indicator status-connected';
-            } else {
-                statusIndicator.textContent = '数据库未连接';
-                statusIndicator.className = 'status-indicator status-disconnected';
+        function updateConnectionStatus(status, message = '') {
+            const statusIndicator = getElementSafely('statusIndicator');
+            const reconnectButton = getElementSafely('reconnectButton');
+            
+            if (!statusIndicator) return;
+            
+            switch(status) {
+                case 'connected':
+                    statusIndicator.textContent = '数据库已连接' + (message ? ` - ${message}` : '');
+                    statusIndicator.className = 'status-indicator status-connected';
+                    if (reconnectButton) reconnectButton.style.display = 'none';
+                    break;
+                case 'connecting':
+                    statusIndicator.textContent = '连接数据库中...' + (message ? ` - ${message}` : '');
+                    statusIndicator.className = 'status-indicator status-connecting';
+                    if (reconnectButton) reconnectButton.style.display = 'none';
+                    break;
+                case 'disconnected':
+                    statusIndicator.textContent = '数据库未连接' + (message ? ` - ${message}` : '');
+                    statusIndicator.className = 'status-indicator status-disconnected';
+                    if (reconnectButton) reconnectButton.style.display = 'inline-block';
+                    break;
             }
         }
         
@@ -1005,9 +1045,36 @@
             return `${year}-${month}-${day}`;
         }
         
+        // 测试数据库连接
+        async function testConnection() {
+            try {
+                updateConnectionStatus('connecting', '测试连接中...');
+                
+                // 使用一个简单的查询测试连接
+                const { data, error, count } = await supabase
+                    .from('plants')
+                    .select('*', { count: 'exact', head: true })
+                    .limit(1);
+                
+                if (error) {
+                    throw error;
+                }
+                
+                connectionRetryCount = 0;
+                updateConnectionStatus('connected', '连接正常');
+                return true;
+            } catch (error) {
+                console.error('数据库连接测试失败:', error);
+                updateConnectionStatus('disconnected', error.message);
+                return false;
+            }
+        }
+        
         // 从Supabase加载数据
         async function loadData() {
             try {
+                updateConnectionStatus('connecting', '加载数据中...');
+                
                 // 加载植物数据
                 const { data: plantsData, error: plantsError } = await supabase
                     .from('plants')
@@ -1047,28 +1114,45 @@
                 renderAdopterTable();
                 renderCheckinTable();
                 
-                updateConnectionStatus(true);
+                updateConnectionStatus('connected', '数据加载完成');
+                connectionRetryCount = 0;
                 return true;
             } catch (error) {
                 console.error('加载数据错误:', error);
-                showError('加载数据失败，请检查网络连接');
-                updateConnectionStatus(false);
+                updateConnectionStatus('disconnected', error.message);
+                
+                // 重试机制
+                if (connectionRetryCount < MAX_RETRY_COUNT) {
+                    connectionRetryCount++;
+                    console.log(`第 ${connectionRetryCount} 次重试...`);
+                    setTimeout(loadData, 2000 * connectionRetryCount); // 指数退避
+                } else {
+                    showError('加载数据失败，请检查网络连接或联系管理员');
+                }
                 return false;
             }
         }
         
         // 初始化数据
         async function initializeData() {
-            const success = await loadData();
-            if (!success) {
-                document.getElementById('errorMessage').textContent = '无法连接到数据库，请检查网络连接或联系管理员';
-                document.getElementById('errorMessage').style.display = 'block';
+            // 先测试连接
+            const connectionOk = await testConnection();
+            if (connectionOk) {
+                await loadData();
+            } else {
+                showError('无法连接到数据库，请检查网络连接');
             }
+        }
+        
+        // 手动重连
+        async function manualReconnect() {
+            connectionRetryCount = 0;
+            await initializeData();
         }
         
         // 更新登录页面植物选择下拉菜单
         function updateLoginPlantSelect() {
-            const plantSelect = document.getElementById('plantSelect');
+            const plantSelect = getElementSafely('plantSelect');
             
             if (plantSelect) {
                 plantSelect.innerHTML = '<option value="">请选择您认养的植物</option>';
@@ -1089,7 +1173,7 @@
         
         // 更新植物选择下拉菜单（管理员界面）
         function updateAdminPlantSelect() {
-            const bindPlantAdmin = document.getElementById('bindPlantAdmin');
+            const bindPlantAdmin = getElementSafely('bindPlantAdmin');
             
             if (bindPlantAdmin) {
                 bindPlantAdmin.innerHTML = '<option value="">请选择植物</option>';
@@ -1110,7 +1194,7 @@
         
         // 更新参与者选择下拉菜单
         function updateAdopterSelect() {
-            const bindAdopterName = document.getElementById('bindAdopterName');
+            const bindAdopterName = getElementSafely('bindAdopterName');
             
             if (bindAdopterName) {
                 bindAdopterName.innerHTML = '<option value="">请选择参与者</option>';
@@ -1213,7 +1297,8 @@
             
             if (pendingCheckins.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="no-records">暂无待审核的打卡记录</td></tr>';
-                document.getElementById('pendingCheckinCount').textContent = '0';
+                const pendingCountElement = getElementSafely('pendingCheckinCount');
+                if (pendingCountElement) pendingCountElement.textContent = '0';
                 return;
             }
             
@@ -1243,7 +1328,55 @@
                 }
             });
             
-            document.getElementById('pendingCheckinCount').textContent = pendingCheckins.length;
+            const pendingCountElement = getElementSafely('pendingCheckinCount');
+            if (pendingCountElement) pendingCountElement.textContent = pendingCheckins.length;
+            
+            // 初始化全选功能
+            initializeBatchSelection();
+        }
+        
+        // 初始化批量选择功能
+        function initializeBatchSelection() {
+            const selectAllCheckbox = getElementSafely('selectAll');
+            const recordCheckboxes = document.querySelectorAll('.record-checkbox');
+            
+            // 全选/取消全选
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function() {
+                    recordCheckboxes.forEach(checkbox => {
+                        checkbox.checked = this.checked;
+                    });
+                    updateSelectedCheckins();
+                });
+            }
+            
+            // 单个选择框变化
+            recordCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateSelectedCheckins);
+            });
+            
+            // 初始化选中记录数组
+            selectedCheckins = [];
+        }
+        
+        // 更新选中的打卡记录
+        function updateSelectedCheckins() {
+            selectedCheckins = [];
+            const recordCheckboxes = document.querySelectorAll('.record-checkbox');
+            
+            recordCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    selectedCheckins.push(checkbox.getAttribute('data-checkin-id'));
+                }
+            });
+            
+            // 更新全选复选框状态
+            const selectAllCheckbox = getElementSafely('selectAll');
+            if (selectAllCheckbox) {
+                const allChecked = selectedCheckins.length === recordCheckboxes.length;
+                selectAllCheckbox.checked = allChecked;
+                selectAllCheckbox.indeterminate = selectedCheckins.length > 0 && !allChecked;
+            }
         }
         
         // 更新用户打卡进度
@@ -1261,27 +1394,34 @@
             const targetDays = 21;
             
             // 更新进度显示
-            document.getElementById('progressDays').textContent = `${checkinDays}/${targetDays}`;
+            const progressDaysElement = getElementSafely('progressDays');
+            if (progressDaysElement) progressDaysElement.textContent = `${checkinDays}/${targetDays}`;
             
             // 更新进度环
-            const progressCircle = document.getElementById('progressCircle');
-            const progressPercentage = (checkinDays / targetDays) * 100;
-            progressCircle.style.background = `conic-gradient(var(--primary-green) 0% ${progressPercentage}%, var(--border-gray) ${progressPercentage}% 100%)`;
+            const progressCircle = getElementSafely('progressCircle');
+            if (progressCircle) {
+                const progressPercentage = (checkinDays / targetDays) * 100;
+                progressCircle.style.background = `conic-gradient(var(--primary-green) 0% ${progressPercentage}%, var(--border-gray) ${progressPercentage}% 100%)`;
+            }
             
             // 检查今日是否已打卡
             const today = formatDate(getBeijingTime());
             const todayCheckin = userCheckins.find(checkin => checkin.date === today);
-            const todayCheckinIndicator = document.getElementById('todayCheckinIndicator');
-            const checkinButton = document.getElementById('checkinButton');
+            const todayCheckinIndicator = getElementSafely('todayCheckinIndicator');
+            const checkinButton = getElementSafely('checkinButton');
             
             if (todayCheckin) {
-                todayCheckinIndicator.style.display = 'inline';
-                checkinButton.disabled = true;
-                checkinButton.innerHTML = '今日已打卡 <span id="todayCheckinIndicator" class="today-checkin-indicator" style="display: inline;">今日已打卡</span>';
+                if (todayCheckinIndicator) todayCheckinIndicator.style.display = 'inline';
+                if (checkinButton) {
+                    checkinButton.disabled = true;
+                    checkinButton.innerHTML = '今日已打卡 <span id="todayCheckinIndicator" class="today-checkin-indicator" style="display: inline;">今日已打卡</span>';
+                }
             } else {
-                todayCheckinIndicator.style.display = 'none';
-                checkinButton.disabled = false;
-                checkinButton.innerHTML = '今日打卡 <span id="todayCheckinIndicator" class="today-checkin-indicator" style="display: none;">今日已打卡</span>';
+                if (todayCheckinIndicator) todayCheckinIndicator.style.display = 'none';
+                if (checkinButton) {
+                    checkinButton.disabled = false;
+                    checkinButton.innerHTML = '今日打卡 <span id="todayCheckinIndicator" class="today-checkin-indicator" style="display: none;">今日已打卡</span>';
+                }
             }
             
             // 更新打卡记录
@@ -1292,7 +1432,7 @@
         function updateRecentRecords() {
             if (!currentUser) return;
             
-            const recentRecords = document.getElementById('recentRecords');
+            const recentRecords = getElementSafely('recentRecords');
             if (!recentRecords) return;
             
             recentRecords.innerHTML = '';
@@ -1324,8 +1464,14 @@
         
         // 登录功能
         async function login() {
-            const username = document.getElementById('username').value.trim();
-            const userType = document.querySelector('.user-type.active').dataset.type;
+            const usernameElement = getElementSafely('username');
+            if (!usernameElement) return;
+            
+            const username = usernameElement.value.trim();
+            const activeUserType = document.querySelector('.user-type.active');
+            if (!activeUserType) return;
+            
+            const userType = activeUserType.dataset.type;
             
             if (!username) {
                 showError('请输入姓名');
@@ -1334,16 +1480,23 @@
             
             // 工作人员账号验证
             if (userType === 'admin') {
-                const password = document.getElementById('password').value;
+                const passwordElement = getElementSafely('password');
+                if (!passwordElement) return;
+                
+                const password = passwordElement.value;
                 if (username === 'zrt' && password === '123456') {
                     currentUser = {
                         username: username,
                         type: userType
                     };
                     
-                    document.getElementById('loginPage').style.display = 'none';
-                    document.getElementById('backendPage').style.display = 'block';
-                    document.getElementById('adminWelcome').textContent = username + '，您好！';
+                    const loginPage = getElementSafely('loginPage');
+                    const backendPage = getElementSafely('backendPage');
+                    const adminWelcome = getElementSafely('adminWelcome');
+                    
+                    if (loginPage) loginPage.style.display = 'none';
+                    if (backendPage) backendPage.style.display = 'block';
+                    if (adminWelcome) adminWelcome.textContent = username + '，您好！';
                     return;
                 } else {
                     showError('工作人员账号或密码错误');
@@ -1355,7 +1508,8 @@
             if (userType === 'user') {
                 // 检查用户是否已存在
                 let adopter = adopters.find(a => a.name === username);
-                const selectedPlantId = document.getElementById('plantSelect').value;
+                const plantSelectElement = getElementSafely('plantSelect');
+                const selectedPlantId = plantSelectElement ? plantSelectElement.value : '';
                 
                 if (!adopter) {
                     // 新用户必须选择植物
@@ -1426,24 +1580,36 @@
                         currentUser.plantName = plant.name;
                         
                         // 显示用户绑定信息
-                        document.getElementById('userWelcomeName').textContent = username;
-                        document.getElementById('userBoundPlant').textContent = `${plant.name} #${plant.id}`;
-                        document.getElementById('userBoundInfo').style.display = 'block';
+                        const userWelcomeName = getElementSafely('userWelcomeName');
+                        const userBoundPlant = getElementSafely('userBoundPlant');
+                        const userBoundInfo = getElementSafely('userBoundInfo');
+                        
+                        if (userWelcomeName) userWelcomeName.textContent = username;
+                        if (userBoundPlant) userBoundPlant.textContent = `${plant.name} #${plant.id}`;
+                        if (userBoundInfo) userBoundInfo.style.display = 'block';
                     }
                 }
                 
                 // 更新界面
                 updateUserProgress();
                 
-                document.getElementById('loginPage').style.display = 'none';
-                document.getElementById('frontendPage').style.display = 'block';
+                const loginPage = getElementSafely('loginPage');
+                const frontendPage = getElementSafely('frontendPage');
+                
+                if (loginPage) loginPage.style.display = 'none';
+                if (frontendPage) frontendPage.style.display = 'block';
             }
         }
         
         // 管理员绑定植物
         async function bindPlantAdmin() {
-            const adopterName = document.getElementById('bindAdopterName').value;
-            const plantId = document.getElementById('bindPlantAdmin').value;
+            const adopterNameElement = getElementSafely('bindAdopterName');
+            const plantIdElement = getElementSafely('bindPlantAdmin');
+            
+            if (!adopterNameElement || !plantIdElement) return;
+            
+            const adopterName = adopterNameElement.value;
+            const plantId = plantIdElement.value;
             
             if (!adopterName || !plantId) {
                 showError('请选择参与者和植物');
@@ -1508,19 +1674,31 @@
         // 退出登录
         function logout() {
             currentUser = null;
-            document.getElementById('frontendPage').style.display = 'none';
-            document.getElementById('backendPage').style.display = 'none';
-            document.getElementById('loginPage').style.display = 'flex';
+            const frontendPage = getElementSafely('frontendPage');
+            const backendPage = getElementSafely('backendPage');
+            const loginPage = getElementSafely('loginPage');
+            
+            if (frontendPage) frontendPage.style.display = 'none';
+            if (backendPage) backendPage.style.display = 'none';
+            if (loginPage) loginPage.style.display = 'flex';
             
             // 重置表单
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
-            document.getElementById('plantSelect').value = '';
+            const usernameElement = getElementSafely('username');
+            const passwordElement = getElementSafely('password');
+            const plantSelectElement = getElementSafely('plantSelect');
+            
+            if (usernameElement) usernameElement.value = '';
+            if (passwordElement) passwordElement.value = '';
+            if (plantSelectElement) plantSelectElement.value = '';
             
             // 重置登录界面显示
-            document.getElementById('plantSelectContainer').style.display = 'none';
-            document.getElementById('loginUserBoundInfo').style.display = 'none';
-            document.getElementById('adminPasswordContainer').style.display = 'none';
+            const plantSelectContainer = getElementSafely('plantSelectContainer');
+            const loginUserBoundInfo = getElementSafely('loginUserBoundInfo');
+            const adminPasswordContainer = getElementSafely('adminPasswordContainer');
+            
+            if (plantSelectContainer) plantSelectContainer.style.display = 'none';
+            if (loginUserBoundInfo) loginUserBoundInfo.style.display = 'none';
+            if (adminPasswordContainer) adminPasswordContainer.style.display = 'none';
         }
         
         // 后台菜单切换
@@ -1533,42 +1711,65 @@
                 item.classList.remove('active');
             });
             
-            document.getElementById(sectionId).style.display = 'block';
-            event.target.classList.add('active');
+            const sectionElement = getElementSafely(sectionId);
+            if (sectionElement) sectionElement.style.display = 'block';
+            
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
         }
         
         // 打开绑定植物模态框（管理员）
         function openBindPlantModal() {
-            document.getElementById('bindPlantModal').style.display = 'flex';
+            const modal = getElementSafely('bindPlantModal');
+            if (modal) modal.style.display = 'flex';
         }
         
         // 关闭绑定植物模态框
         function closeBindPlantModal() {
-            document.getElementById('bindPlantModal').style.display = 'none';
+            const modal = getElementSafely('bindPlantModal');
+            if (modal) modal.style.display = 'none';
+            
             // 清空表单
-            document.getElementById('bindAdopterName').value = '';
-            document.getElementById('bindPlantAdmin').value = '';
+            const adopterNameElement = getElementSafely('bindAdopterName');
+            const plantIdElement = getElementSafely('bindPlantAdmin');
+            
+            if (adopterNameElement) adopterNameElement.value = '';
+            if (plantIdElement) plantIdElement.value = '';
         }
         
         // 打开添加植物模态框
         function openAddPlantModal() {
-            document.getElementById('addPlantModal').style.display = 'flex';
+            const modal = getElementSafely('addPlantModal');
+            if (modal) modal.style.display = 'flex';
         }
         
         // 关闭添加植物模态框
         function closeAddPlantModal() {
-            document.getElementById('addPlantModal').style.display = 'none';
+            const modal = getElementSafely('addPlantModal');
+            if (modal) modal.style.display = 'none';
+            
             // 清空表单
-            document.getElementById('plantId').value = '';
-            document.getElementById('plantName').value = '';
-            document.getElementById('plantDescription').value = '';
+            const plantIdElement = getElementSafely('plantId');
+            const plantNameElement = getElementSafely('plantName');
+            const plantDescriptionElement = getElementSafely('plantDescription');
+            
+            if (plantIdElement) plantIdElement.value = '';
+            if (plantNameElement) plantNameElement.value = '';
+            if (plantDescriptionElement) plantDescriptionElement.value = '';
         }
         
         // 添加植物
         async function addPlant() {
-            const plantId = document.getElementById('plantId').value;
-            const plantName = document.getElementById('plantName').value;
-            const plantDescription = document.getElementById('plantDescription').value;
+            const plantIdElement = getElementSafely('plantId');
+            const plantNameElement = getElementSafely('plantName');
+            
+            if (!plantIdElement || !plantNameElement) return;
+            
+            const plantId = plantIdElement.value;
+            const plantName = plantNameElement.value;
+            const plantDescriptionElement = getElementSafely('plantDescription');
+            const plantDescription = plantDescriptionElement ? plantDescriptionElement.value : '';
             
             if (!plantId || !plantName) {
                 showError('请填写植物编号和名称');
@@ -1677,28 +1878,35 @@
         
         // 打开照片上传模态框
         function openPhotoUploadModal() {
-            document.getElementById('photoUploadModal').style.display = 'flex';
+            const modal = getElementSafely('photoUploadModal');
+            if (modal) modal.style.display = 'flex';
             resetPhotoUploadModal();
         }
         
         // 关闭照片上传模态框
         function closePhotoUploadModal() {
-            document.getElementById('photoUploadModal').style.display = 'none';
+            const modal = getElementSafely('photoUploadModal');
+            if (modal) modal.style.display = 'none';
             resetPhotoUploadModal();
         }
         
         // 重置照片上传模态框
         function resetPhotoUploadModal() {
             currentPhotoData = null;
-            document.getElementById('photoPreview').style.display = 'none';
-            document.getElementById('submitPhotoButton').disabled = true;
-            document.getElementById('fileSizeWarning').style.display = 'none';
-            document.getElementById('photoUpload').value = '';
-            document.getElementById('compressionLoading').style.display = 'none';
-            document.getElementById('compressionProgress').style.display = 'none';
+            const photoPreview = getElementSafely('photoPreview');
+            const submitPhotoButton = getElementSafely('submitPhotoButton');
+            const fileSizeWarning = getElementSafely('fileSizeWarning');
+            const photoUpload = getElementSafely('photoUpload');
+            const compressionStatus = getElementSafely('compressionStatus');
+            
+            if (photoPreview) photoPreview.style.display = 'none';
+            if (submitPhotoButton) submitPhotoButton.disabled = true;
+            if (fileSizeWarning) fileSizeWarning.style.display = 'none';
+            if (photoUpload) photoUpload.value = '';
+            if (compressionStatus) compressionStatus.style.display = 'none';
         }
         
-        // 压缩图片函数
+        // 图片压缩函数
         function compressImage(file, maxSizeMB = 3, quality = 0.8, callback) {
             const maxSize = maxSizeMB * 1024 * 1024; // 转换为字节
             const reader = new FileReader();
@@ -1726,10 +1934,6 @@
                     while (compressedDataURL.length > maxSize && currentQuality > 0.1) {
                         currentQuality -= 0.1;
                         compressedDataURL = canvas.toDataURL('image/jpeg', currentQuality);
-                        
-                        // 更新压缩进度
-                        document.getElementById('compressionProgress').textContent = 
-                            `压缩进度: ${Math.round((1 - currentQuality) * 100)}%`;
                     }
                     
                     // 如果仍然太大，尝试缩小尺寸
@@ -1746,10 +1950,6 @@
                         tempCtx.drawImage(img, 0, 0, newWidth, newHeight);
                         compressedDataURL = tempCanvas.toDataURL('image/jpeg', 0.7);
                     }
-                    
-                    // 隐藏加载指示器
-                    document.getElementById('compressionLoading').style.display = 'none';
-                    document.getElementById('compressionProgress').style.display = 'none';
                     
                     callback(compressedDataURL);
                 };
@@ -1769,46 +1969,62 @@
                 return;
             }
             
-            // 显示加载指示器
-            document.getElementById('compressionLoading').style.display = 'block';
-            document.getElementById('compressionProgress').style.display = 'block';
-            document.getElementById('compressionProgress').textContent = '开始压缩...';
+            // 显示压缩状态
+            const compressionStatus = getElementSafely('compressionStatus');
+            if (compressionStatus) {
+                compressionStatus.style.display = 'block';
+                compressionStatus.textContent = '正在压缩图片...';
+            }
             
             // 压缩图片
             compressImage(file, 3, 0.8, function(compressedDataURL) {
                 currentPhotoData = compressedDataURL;
                 
-                // 显示照片预览
-                const photoPreview = document.getElementById('photoPreview');
-                photoPreview.src = currentPhotoData;
-                photoPreview.style.display = 'block';
+                // 隐藏压缩状态
+                if (compressionStatus) compressionStatus.style.display = 'none';
                 
-                // 启用提交按钮
-                document.getElementById('submitPhotoButton').disabled = false;
+                // 显示照片预览
+                const photoPreview = getElementSafely('photoPreview');
+                if (photoPreview) {
+                    photoPreview.src = currentPhotoData;
+                    photoPreview.style.display = 'block';
+                }
                 
                 // 检查最终文件大小
                 const fileSize = Math.round((currentPhotoData.length * 3) / 4 / 1024); // 近似计算KB
+                const fileSizeWarning = getElementSafely('fileSizeWarning');
+                const submitPhotoButton = getElementSafely('submitPhotoButton');
+                
                 if (fileSize > 3072) { // 3MB = 3072KB
-                    document.getElementById('fileSizeWarning').style.display = 'block';
-                    document.getElementById('fileSizeWarning').textContent = 
-                        `照片大小 ${fileSize}KB，仍然超过3MB限制，请选择较小的图片`;
-                    document.getElementById('submitPhotoButton').disabled = true;
+                    if (fileSizeWarning) {
+                        fileSizeWarning.style.display = 'block';
+                        fileSizeWarning.textContent = 
+                            `照片大小 ${fileSize}KB，仍然超过3MB限制，请选择较小的图片`;
+                    }
+                    if (submitPhotoButton) submitPhotoButton.disabled = true;
                 } else {
-                    document.getElementById('fileSizeWarning').style.display = 'none';
+                    if (fileSizeWarning) fileSizeWarning.style.display = 'none';
+                    if (submitPhotoButton) submitPhotoButton.disabled = false;
                 }
             });
         }
         
         // 显示上传成功通知
         function showUploadNotification() {
-            document.getElementById('uploadNotification').style.display = 'block';
-            document.getElementById('notificationOverlay').style.display = 'block';
+            const uploadNotification = getElementSafely('uploadNotification');
+            const notificationOverlay = getElementSafely('notificationOverlay');
+            
+            if (uploadNotification) uploadNotification.style.display = 'block';
+            if (notificationOverlay) notificationOverlay.style.display = 'block';
         }
         
         // 隐藏上传成功通知
         function hideUploadNotification() {
-            document.getElementById('uploadNotification').style.display = 'none';
-            document.getElementById('notificationOverlay').style.display = 'none';
+            const uploadNotification = getElementSafely('uploadNotification');
+            const notificationOverlay = getElementSafely('notificationOverlay');
+            
+            if (uploadNotification) uploadNotification.style.display = 'none';
+            if (notificationOverlay) notificationOverlay.style.display = 'none';
         }
         
         // 提交打卡（带照片）
@@ -1938,49 +2154,139 @@
             alert('打卡记录已拒绝');
         }
         
+        // 批量通过打卡
+        async function batchApproveCheckins() {
+            if (selectedCheckins.length === 0) {
+                showError('请先选择要通过的打卡记录');
+                return;
+            }
+            
+            if (!confirm(`确定要通过选中的 ${selectedCheckins.length} 条打卡记录吗？`)) {
+                return;
+            }
+            
+            try {
+                const { error } = await supabase
+                    .from('checkins')
+                    .update({ status: 'approved' })
+                    .in('id', selectedCheckins);
+                
+                if (error) {
+                    console.error('批量通过错误:', error);
+                    showError('批量通过操作失败');
+                    return;
+                }
+                
+                // 更新本地数组
+                checkins.forEach(checkin => {
+                    if (selectedCheckins.includes(checkin.id.toString())) {
+                        checkin.status = 'approved';
+                    }
+                });
+                
+                // 重新渲染表格
+                renderCheckinTable();
+                alert(`成功通过 ${selectedCheckins.length} 条打卡记录`);
+            } catch (error) {
+                console.error('批量通过错误:', error);
+                showError('批量通过操作失败');
+            }
+        }
+        
+        // 批量拒绝打卡
+        async function batchRejectCheckins() {
+            if (selectedCheckins.length === 0) {
+                showError('请先选择要拒绝的打卡记录');
+                return;
+            }
+            
+            if (!confirm(`确定要拒绝选中的 ${selectedCheckins.length} 条打卡记录吗？`)) {
+                return;
+            }
+            
+            try {
+                const { error } = await supabase
+                    .from('checkins')
+                    .update({ status: 'rejected' })
+                    .in('id', selectedCheckins);
+                
+                if (error) {
+                    console.error('批量拒绝错误:', error);
+                    showError('批量拒绝操作失败');
+                    return;
+                }
+                
+                // 更新本地数组
+                checkins.forEach(checkin => {
+                    if (selectedCheckins.includes(checkin.id.toString())) {
+                        checkin.status = 'rejected';
+                    }
+                });
+                
+                // 重新渲染表格
+                renderCheckinTable();
+                alert(`成功拒绝 ${selectedCheckins.length} 条打卡记录`);
+            } catch (error) {
+                console.error('批量拒绝错误:', error);
+                showError('批量拒绝操作失败');
+            }
+        }
+        
         // 用户类型切换
         function handleUserTypeChange() {
-            const userType = document.querySelector('.user-type.active').dataset.type;
-            const plantSelectContainer = document.getElementById('plantSelectContainer');
-            const loginUserBoundInfo = document.getElementById('loginUserBoundInfo');
-            const adminPasswordContainer = document.getElementById('adminPasswordContainer');
+            const userTypeElement = document.querySelector('.user-type.active');
+            if (!userTypeElement) return;
+            
+            const userType = userTypeElement.dataset.type;
+            const plantSelectContainer = getElementSafely('plantSelectContainer');
+            const loginUserBoundInfo = getElementSafely('loginUserBoundInfo');
+            const adminPasswordContainer = getElementSafely('adminPasswordContainer');
             
             // 重置显示状态
-            plantSelectContainer.style.display = 'none';
-            loginUserBoundInfo.style.display = 'none';
-            adminPasswordContainer.style.display = 'none';
+            if (plantSelectContainer) plantSelectContainer.style.display = 'none';
+            if (loginUserBoundInfo) loginUserBoundInfo.style.display = 'none';
+            if (adminPasswordContainer) adminPasswordContainer.style.display = 'none';
             
             // 清空用户名和密码
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
+            const usernameElement = getElementSafely('username');
+            const passwordElement = getElementSafely('password');
+            
+            if (usernameElement) usernameElement.value = '';
+            if (passwordElement) passwordElement.value = '';
             
             if (userType === 'admin') {
                 // 管理员需要密码
-                adminPasswordContainer.style.display = 'block';
+                if (adminPasswordContainer) adminPasswordContainer.style.display = 'block';
             } else {
                 // 参与者不需要密码
-                adminPasswordContainer.style.display = 'none';
+                if (adminPasswordContainer) adminPasswordContainer.style.display = 'none';
             }
         }
         
         // 用户名输入事件 - 检查用户是否已绑定植物
         function handleUsernameInput() {
-            const userType = document.querySelector('.user-type.active').dataset.type;
-            const username = document.getElementById('username').value.trim();
-            const plantSelectContainer = document.getElementById('plantSelectContainer');
-            const loginUserBoundInfo = document.getElementById('loginUserBoundInfo');
-            const boundPlantName = document.getElementById('boundPlantName');
+            const activeUserType = document.querySelector('.user-type.active');
+            if (!activeUserType) return;
+            
+            const userType = activeUserType.dataset.type;
+            const usernameElement = getElementSafely('username');
+            if (!usernameElement) return;
+            
+            const username = usernameElement.value.trim();
+            const plantSelectContainer = getElementSafely('plantSelectContainer');
+            const loginUserBoundInfo = getElementSafely('loginUserBoundInfo');
+            const boundPlantName = getElementSafely('boundPlantName');
             
             // 如果是管理员，直接返回，不显示植物相关选项
             if (userType === 'admin') {
-                plantSelectContainer.style.display = 'none';
-                loginUserBoundInfo.style.display = 'none';
+                if (plantSelectContainer) plantSelectContainer.style.display = 'none';
+                if (loginUserBoundInfo) loginUserBoundInfo.style.display = 'none';
                 return;
             }
             
             // 重置显示状态
-            plantSelectContainer.style.display = 'none';
-            loginUserBoundInfo.style.display = 'none';
+            if (plantSelectContainer) plantSelectContainer.style.display = 'none';
+            if (loginUserBoundInfo) loginUserBoundInfo.style.display = 'none';
             
             if (username) {
                 // 检查用户是否已存在
@@ -1990,17 +2296,17 @@
                     // 老用户 - 显示已绑定植物信息
                     if (adopter.plant_id) {
                         const plant = plants.find(p => p.id === adopter.plant_id);
-                        if (plant) {
+                        if (plant && boundPlantName) {
                             boundPlantName.textContent = `${plant.name} #${plant.id}`;
-                            loginUserBoundInfo.style.display = 'block';
+                            if (loginUserBoundInfo) loginUserBoundInfo.style.display = 'block';
                         }
                     } else {
                         // 老用户但未绑定植物 - 显示植物选择
-                        plantSelectContainer.style.display = 'block';
+                        if (plantSelectContainer) plantSelectContainer.style.display = 'block';
                     }
                 } else {
                     // 新用户 - 显示植物选择
-                    plantSelectContainer.style.display = 'block';
+                    if (plantSelectContainer) plantSelectContainer.style.display = 'block';
                 }
             }
         }
@@ -2019,13 +2325,22 @@
             });
             
             // 用户名输入事件
-            document.getElementById('username').addEventListener('input', handleUsernameInput);
+            const usernameElement = getElementSafely('username');
+            if (usernameElement) {
+                usernameElement.addEventListener('input', handleUsernameInput);
+            }
             
             // 登录按钮
-            document.getElementById('loginButton').addEventListener('click', login);
+            const loginButton = getElementSafely('loginButton');
+            if (loginButton) {
+                loginButton.addEventListener('click', login);
+            }
             
             // 退出登录按钮
-            document.getElementById('logoutButton').addEventListener('click', logout);
+            const logoutButton = getElementSafely('logoutButton');
+            if (logoutButton) {
+                logoutButton.addEventListener('click', logout);
+            }
             
             // 后台菜单
             document.querySelectorAll('.menu-item').forEach(item => {
@@ -2036,68 +2351,140 @@
             });
             
             // 添加植物按钮
-            document.getElementById('addPlantButton').addEventListener('click', openAddPlantModal);
+            const addPlantButton = getElementSafely('addPlantButton');
+            if (addPlantButton) {
+                addPlantButton.addEventListener('click', openAddPlantModal);
+            }
             
             // 关闭添加植物模态框
-            document.getElementById('closeAddPlantModal').addEventListener('click', closeAddPlantModal);
-            document.getElementById('cancelAddPlant').addEventListener('click', closeAddPlantModal);
+            const closeAddPlantModalButton = getElementSafely('closeAddPlantModal');
+            if (closeAddPlantModalButton) {
+                closeAddPlantModalButton.addEventListener('click', closeAddPlantModal);
+            }
+            
+            const cancelAddPlantButton = getElementSafely('cancelAddPlant');
+            if (cancelAddPlantButton) {
+                cancelAddPlantButton.addEventListener('click', closeAddPlantModal);
+            }
             
             // 保存植物按钮
-            document.getElementById('savePlantButton').addEventListener('click', addPlant);
+            const savePlantButton = getElementSafely('savePlantButton');
+            if (savePlantButton) {
+                savePlantButton.addEventListener('click', addPlant);
+            }
             
             // 管理员绑定植物按钮
-            document.getElementById('bindAdopterButton').addEventListener('click', openBindPlantModal);
+            const bindAdopterButton = getElementSafely('bindAdopterButton');
+            if (bindAdopterButton) {
+                bindAdopterButton.addEventListener('click', openBindPlantModal);
+            }
             
             // 关闭绑定植物模态框
-            document.getElementById('closeBindPlantModal').addEventListener('click', closeBindPlantModal);
-            document.getElementById('cancelBindPlant').addEventListener('click', closeBindPlantModal);
+            const closeBindPlantModalButton = getElementSafely('closeBindPlantModal');
+            if (closeBindPlantModalButton) {
+                closeBindPlantModalButton.addEventListener('click', closeBindPlantModal);
+            }
+            
+            const cancelBindPlantButton = getElementSafely('cancelBindPlant');
+            if (cancelBindPlantButton) {
+                cancelBindPlantButton.addEventListener('click', closeBindPlantModal);
+            }
             
             // 保存绑定植物按钮
-            document.getElementById('saveBindPlantButton').addEventListener('click', bindPlantAdmin);
+            const saveBindPlantButton = getElementSafely('saveBindPlantButton');
+            if (saveBindPlantButton) {
+                saveBindPlantButton.addEventListener('click', bindPlantAdmin);
+            }
             
             // 打卡按钮 - 改为打开照片上传模态框
-            document.getElementById('checkinButton').addEventListener('click', openPhotoUploadModal);
+            const checkinButton = getElementSafely('checkinButton');
+            if (checkinButton) {
+                checkinButton.addEventListener('click', openPhotoUploadModal);
+            }
             
             // 照片上传模态框事件
-            document.getElementById('closePhotoUploadModal').addEventListener('click', closePhotoUploadModal);
-            document.getElementById('cancelPhotoButton').addEventListener('click', closePhotoUploadModal);
-            document.getElementById('submitPhotoButton').addEventListener('click', submitCheckinWithPhoto);
-            document.getElementById('photoUpload').addEventListener('change', handlePhotoUpload);
+            const closePhotoUploadModalButton = getElementSafely('closePhotoUploadModal');
+            if (closePhotoUploadModalButton) {
+                closePhotoUploadModalButton.addEventListener('click', closePhotoUploadModal);
+            }
+            
+            const cancelPhotoButton = getElementSafely('cancelPhotoButton');
+            if (cancelPhotoButton) {
+                cancelPhotoButton.addEventListener('click', closePhotoUploadModal);
+            }
+            
+            const submitPhotoButton = getElementSafely('submitPhotoButton');
+            if (submitPhotoButton) {
+                submitPhotoButton.addEventListener('click', submitCheckinWithPhoto);
+            }
+            
+            const photoUpload = getElementSafely('photoUpload');
+            if (photoUpload) {
+                photoUpload.addEventListener('change', handlePhotoUpload);
+            }
             
             // 照片上传区域点击事件
-            document.getElementById('photoUploadArea').addEventListener('click', function() {
-                document.getElementById('photoUpload').click();
-            });
+            const photoUploadArea = getElementSafely('photoUploadArea');
+            if (photoUploadArea) {
+                photoUploadArea.addEventListener('click', function() {
+                    if (photoUpload) photoUpload.click();
+                });
+            }
             
             // 关闭通知按钮
-            document.getElementById('closeNotificationButton').addEventListener('click', hideUploadNotification);
-            document.getElementById('notificationOverlay').addEventListener('click', hideUploadNotification);
+            const closeNotificationButton = getElementSafely('closeNotificationButton');
+            if (closeNotificationButton) {
+                closeNotificationButton.addEventListener('click', hideUploadNotification);
+            }
+            
+            const notificationOverlay = getElementSafely('notificationOverlay');
+            if (notificationOverlay) {
+                notificationOverlay.addEventListener('click', hideUploadNotification);
+            }
+            
+            // 批量操作按钮
+            const batchApproveButton = getElementSafely('batchApproveButton');
+            if (batchApproveButton) {
+                batchApproveButton.addEventListener('click', batchApproveCheckins);
+            }
+            
+            const batchRejectButton = getElementSafely('batchRejectButton');
+            if (batchRejectButton) {
+                batchRejectButton.addEventListener('click', batchRejectCheckins);
+            }
+            
+            // 重连按钮
+            const reconnectButton = getElementSafely('reconnectButton');
+            if (reconnectButton) {
+                reconnectButton.addEventListener('click', manualReconnect);
+            }
             
             // 拖放功能
-            const photoUploadArea = document.getElementById('photoUploadArea');
-            photoUploadArea.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                this.style.borderColor = 'var(--primary-green)';
-                this.style.backgroundColor = 'var(--light-green)';
-            });
-            
-            photoUploadArea.addEventListener('dragleave', function(e) {
-                e.preventDefault();
-                this.style.borderColor = 'var(--border-gray)';
-                this.style.backgroundColor = 'transparent';
-            });
-            
-            photoUploadArea.addEventListener('drop', function(e) {
-                e.preventDefault();
-                this.style.borderColor = 'var(--border-gray)';
-                this.style.backgroundColor = 'transparent';
+            if (photoUploadArea) {
+                photoUploadArea.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = 'var(--primary-green)';
+                    this.style.backgroundColor = 'var(--light-green)';
+                });
                 
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    document.getElementById('photoUpload').files = files;
-                    handlePhotoUpload({ target: { files: files } });
-                }
-            });
+                photoUploadArea.addEventListener('dragleave', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = 'var(--border-gray)';
+                    this.style.backgroundColor = 'transparent';
+                });
+                
+                photoUploadArea.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = 'var(--border-gray)';
+                    this.style.backgroundColor = 'transparent';
+                    
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0 && photoUpload) {
+                        photoUpload.files = files;
+                        handlePhotoUpload({ target: { files: files } });
+                    }
+                });
+            }
             
             // 动态生成的按钮事件委托
             document.addEventListener('click', function(e) {
@@ -2144,7 +2531,20 @@
             console.log('初始化Supabase...');
             
             try {
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                    auth: {
+                        persistSession: false,
+                        autoRefreshToken: false,
+                    },
+                    db: {
+                        schema: 'public'
+                    },
+                    global: {
+                        headers: {
+                            'X-Client-Info': 'plant-checkin-app'
+                        }
+                    }
+                });
                 console.log('Supabase初始化成功');
                 return true;
             } catch (error) {
